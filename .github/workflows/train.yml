@@ -1,15 +1,15 @@
-name: Train and Predict FA Cup
+name: Train and Predict FA Cup BTTS
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1" # Cada lunes a las 06:00 UTC
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
 
 jobs:
-  train-and-predict:
+  train-and-predict-btts:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -28,24 +28,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Train models
+      - name: Train BTTS Yes model
         env:
           THESTATSAPI_API_KEY: ${{ secrets.THESTATSAPI_API_KEY }}
-        run: python train_fa_cup.py
+        run: python train_btts_fa_cup.py
 
-      - name: Predict upcoming matches
+      - name: Predict upcoming BTTS matches
         env:
           THESTATSAPI_API_KEY: ${{ secrets.THESTATSAPI_API_KEY }}
           UPCOMING_MATCH_STATUS: scheduled
-        run: python predict_fa_cup.py
+        run: python predict_btts_fa_cup.py
 
-      - name: Upload models, dataset, and predictions
+      - name: Upload model, dataset and BTTS predictions
         uses: actions/upload-artifact@v4
         with:
-          name: fa-cup-results-${{ github.run_number }}
+          name: fa-cup-btts-results-${{ github.run_number }}
           path: |
             models/
             fa_cup_dataset.csv
-            fa_cup_predictions.csv
+            fa_cup_predictions_btts.csv
           if-no-files-found: warn
           retention-days: 30
