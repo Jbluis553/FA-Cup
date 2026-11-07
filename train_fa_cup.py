@@ -283,7 +283,11 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
             features[f"xg_diff_{window}"] = features[f"home_xg_for_{window}"] - features[f"away_xg_for_{window}"]
         features["rest_days_diff"] = features["home_rest_days"] - features["away_rest_days"]
         features["congestion_diff"] = features["home_matches_last_10"] - features["away_matches_last_10"]
-        features["level_diff"] = row.get("away_level", np.nan) - row.get("home_level", np.nan)
+        # La API omite frecuentemente el nivel de los equipos; conviértelo a NaN
+        # antes de restar, ya que None - None provoca TypeError durante el pipeline.
+        away_level = pd.to_numeric(row.get("away_level"), errors="coerce")
+        home_level = pd.to_numeric(row.get("home_level"), errors="coerce")
+        features["level_diff"] = away_level - home_level
         features["neutral_venue"] = row.get("neutral_venue", np.nan)
         features["market_home_prob"] = row.get("market_home_prob", np.nan)
         features["market_overround"] = row.get("market_overround", np.nan)
