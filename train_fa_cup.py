@@ -312,7 +312,10 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
             history.setdefault(team, []).append(item)
 
     feature_frame = pd.DataFrame(feature_rows, index=df.index)
-    result = pd.concat([df, feature_frame], axis=1)
+    # Las features de mercado y neutralidad ya existen en el dataset bruto.
+    # Quitarlas antes del join evita duplicar nombres de columna en el resultado.
+    df = df.drop(columns=feature_frame.columns.intersection(df.columns))
+    result = df.join(feature_frame)
     return result
 
 
