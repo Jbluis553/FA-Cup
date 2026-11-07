@@ -25,7 +25,7 @@ API_KEY = os.getenv("THESTATSAPI_API_KEY")
 BASE_URL = "https://api.thestatsapi.com/api"
 HEADERS = {"Authorization": f"Bearer {API_KEY}"} if API_KEY else {}
 
-# Cuántas temporadas históricas descargar (ajusta según tu plan/quota)
+# Cuántas temporadas históricas descargar
 MAX_SEASONS = 6
 PER_PAGE = 100
 SLEEP_BETWEEN_CALLS = 0.35   # respeta rate limits
@@ -65,7 +65,7 @@ def find_fa_cup_competition():
     if not data or not data.get("data"):
         raise ValueError("No se encontró la FA Cup. Revisa tu API key o cobertura.")
 
-    # Preferimos el que contenga "FA Cup" y sea de Inglaterra
+    # Preferimos el que contenga "FA Cup" y no sea de mujeres
     for comp in data["data"]:
         name = comp.get("name", "").lower()
         if "fa cup" in name and "women" not in name:
@@ -118,13 +118,6 @@ def fetch_all_matches(competition_id: str, season_id: str, status: str = "finish
         time.sleep(SLEEP_BETWEEN_CALLS)
 
     return all_matches
-
-def fetch_match_stats(match_id: str):
-    """Obtiene estadísticas del partido (si están disponibles)."""
-    data = api_get(f"/football/matches/{match_id}/stats")
-    if not data or "data" not in data:
-        return None
-    return data["data"]
 
 # ============================================================
 # CONSTRUCCIÓN DEL DATASET
@@ -194,7 +187,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values("utc_date").reset_index(drop=True)
 
     # Forma reciente (últimos 5 partidos de cada equipo)
-    def compute_form(team_col, goals_for_col, goals_against_col, window=5):
+    def compute_form(team_col, window=5):
         form_pts = []
         form_gf = []
         form_ga = []
@@ -231,12 +224,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         return form_pts, form_gf, form_ga
 
     print("Calculando forma de equipos...")
-    df["home_form_pts"], df["home_gf_avg"], df["home_ga_avg"] = compute_form(
-        "home_team", "home_goals", "away_goals"
-    )
-    df["away_form_pts"], df["away_gf_avg"], df["away_ga_avg"] = compute_form(
-        "away_team", "away_goals", "home_goals"
-    )
+    df["home_form_pts"], df["home_gf_avg"], df["home_ga_avg"] = compute_form("home_team")
+    df["away_form_pts"], df["away_gf_avg"], df["away_ga_avg"] = compute_form("away_team")
 
     df["form_diff"] = df["home_form_pts"] - df["away_form_pts"]
     df["gf_diff"] = df["home_gf_avg"] - df["away_gf_avg"]
@@ -273,15 +262,32 @@ def train_models(df: pd.DataFrame):
     y_train, y_test = y_enc[:split], y_enc[split:]
 
     models = {
-        "LogisticRegression": LogisticRegression(max_iter=1000, multi_class="multinomial", random_state=42),
-        "RandomForest": RandomForestClassifier(n_estimators=300, max_depth=10, class_weight="balanced", random_state=42, n_jobs=-1),
+        "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42),
+        "RandomForest": RandomForestClassifier(
+            n_estimators=300,
+            max_depth=10,
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1
+        ),
         "XGBoost": xgb.XGBClassifier(
-            n_estimators=300, max_depth=6, learning_rate=0.05,
-            objective="multi:softprob", num_class=3, random_state=42, n_jobs=-1
+            n_estimators=300,
+            max_depth=6,
+            learning_rate=0.05,
+            objective="multi:softprob",
+            num_class=3,
+            random_state=42,
+            n_jobs=-1,
+            eval_metric="mlogloss"
         ),
         "LightGBM": lgb.LGBMClassifier(
-            n_estimators=300, max_depth=7, learning_rate=0.05,
-            objective="multiclass", num_class=3, random_state=42, verbose=-1
+            n_estimators=300,
+            max_depth=7,
+            learning_rate=0.05,
+            objective="multiclass",
+            num_class=3,
+            random_state=42,
+            verbose=-1
         )
     }
 
@@ -311,7 +317,7 @@ def train_models(df: pd.DataFrame):
             best_model = model
             best_name = name
 
-    # Guardar el mejor y el encoder
+    # Guardar el mejor modelo y el encoder
     joblib.dump(best_model, "models/best_model.joblib")
     joblib.dump(le, "models/label_encoder.joblib")
     joblib.dump(feature_cols, "models/feature_cols.joblib")
