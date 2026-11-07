@@ -1,14 +1,17 @@
-name: Train FA Cup ML Models
+name: Train and Predict FA Cup
 
 on:
-  workflow_dispatch:          # Manual
+  workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1"       # Cada lunes a las 06:00 UTC
+    - cron: "0 6 * * 1" # Cada lunes a las 06:00 UTC
+
+permissions:
+  contents: read
 
 jobs:
-  train:
+  train-and-predict:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -18,7 +21,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -30,11 +33,19 @@ jobs:
           THESTATSAPI_API_KEY: ${{ secrets.THESTATSAPI_API_KEY }}
         run: python train_fa_cup.py
 
-      - name: Upload artifacts
+      - name: Predict upcoming matches
+        env:
+          THESTATSAPI_API_KEY: ${{ secrets.THESTATSAPI_API_KEY }}
+          UPCOMING_MATCH_STATUS: scheduled
+        run: python predict_fa_cup.py
+
+      - name: Upload models, dataset, and predictions
         uses: actions/upload-artifact@v4
         with:
-          name: fa-cup-models-${{ github.run_number }}
+          name: fa-cup-results-${{ github.run_number }}
           path: |
             models/
             fa_cup_dataset.csv
+            fa_cup_predictions.csv
+          if-no-files-found: warn
           retention-days: 30
